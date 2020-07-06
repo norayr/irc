@@ -1,11 +1,13 @@
+BUILD=build
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+mkfile_dir_path := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
 
-VOC = /opt/voc/bin/voc
 
 all:
-	$(VOC) -s types.Mod sockets.Mod netdb.Mod Internet.Mod stringHelpers.Mod time.Mod IRC.Mod test.Mod -m
+			mkdir -p $(BUILD)
+			cd $(BUILD) && voc -s \
+			$(mkfile_dir_path)/src/IRC.Mod
 
 clean:
-	rm *.h
-	rm *.c
-	rm *.o
-	rm *.sym
+			if [ -d "$(BUILD)" ]; then rm -rf $(BUILD); fi

@@ -1,5 +1,5 @@
 MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
-IMPORT Internet, Out, Files, Strings := ooc2Strings, sh := stringHelpers, types, time;
+IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time;
 
 CONST
   msgLen* = 512; (* message length not more than 512 characters *)
@@ -118,7 +118,7 @@ BEGIN
         Strings.Append(" ", str);
         Strings.Append(nick, str);
         Strings.Append(" +i", str);
-        sh.appendLFCR(str);
+        strutils.appendLFCR(str);
         (*Strings.Append(eol, str);*)
 
         i := 0;
@@ -130,7 +130,7 @@ BEGIN
           IF i = LEN(channels^) THEN
             Strings.Append(eol, str);
           ELSE
-            sh.appendLFCR(str);
+            strutils.appendLFCR(str);
           END;
         UNTIL  i = LEN(channels^);
 END formModeJoinLine;
@@ -187,7 +187,7 @@ PROCEDURE Receive*(VAR inst: instance; VAR str: ARRAY OF CHAR): BOOLEAN;
 VAR
   b: BOOLEAN;
 BEGIN
-  sh.zeroStr(str);
+  strutils.zeroStr(str);
   b := Internet.Read(inst.connection, str);
   IF b THEN
     Out.String("received: '");
@@ -242,7 +242,7 @@ VAR
   tmp: ARRAY msgLen OF CHAR;
   b : BOOLEAN;
 BEGIN
-      sh.cutLine(line, tmp);
+      strutils.cutLine(line, tmp);
       tmp[1] := 'O'; (* replace "PING" by "PONG" *)
       b := Send(inst, tmp);
 END Pong;
@@ -252,7 +252,7 @@ VAR
   str : ARRAY msgLen OF CHAR;
   b : BOOLEAN;
 BEGIN
-        sh.zeroStr(str);
+        strutils.zeroStr(str);
         formModeLine(str, inst.nick);
         b := Send(inst, str);
 END Mode;
@@ -261,7 +261,7 @@ PROCEDURE ModeAndJoin*(VAR inst : instance);
 VAR str: ARRAY msgLen OF CHAR;
     b: BOOLEAN;
 BEGIN
-         sh.zeroStr(str);
+         strutils.zeroStr(str);
          formModeJoinLine(str, inst.nick, inst.channelList);
          b := Send(inst, str);
 END ModeAndJoin;
@@ -271,7 +271,7 @@ VAR
   str: ARRAY msgLen OF CHAR;
   b: BOOLEAN;
 BEGIN
-  sh.zeroStr(str);
+  strutils.zeroStr(str);
   formJoinLine(str, inst.channelList^[0].channel);
   Out.String("SENDING JOIN LINE"); Out.Ln;
   b := Send(inst, str);
@@ -282,7 +282,7 @@ VAR
   pos: INTEGER;
   found: BOOLEAN;
 BEGIN
-  sh.zeroStr(user);
+  strutils.zeroStr(user);
   Strings.FindNext(" ", line, 1, found, pos);
   IF found THEN
     Strings.Extract(line, 1, pos - 1, user);
@@ -295,7 +295,7 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
-  sh.zeroStr(mtype);
+  strutils.zeroStr(mtype);
   Strings.FindNext(" ", line, 0, found, pos0);
   IF found THEN
      Strings.FindNext(" ", line, pos0+1, found, pos1);
@@ -311,12 +311,12 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
-  sh.zeroStr(room);
+  strutils.zeroStr(room);
   Strings.FindNext(" ", line, 0, found, pos1);
   IF found THEN
      Strings.FindNext(" ", line, pos1+1, found, pos0);
      IF found THEN
-       sh.getNextWord(line, pos0, room);
+       strutils.getNextWord(line, pos0, room);
      END;
   END;
   RETURN found
@@ -327,13 +327,13 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
-  sh.zeroStr(msg);
+  strutils.zeroStr(msg);
   Strings.FindNext(" ", line, 0, found, pos0);
   IF found THEN
      Strings.FindNext(" ", line, pos0+1, found, pos1);
      IF found THEN
         Strings.FindNext(" ", line, pos1+1, found, pos0);
-        sh.getTillEOL(line, pos0+1, msg);
+        strutils.getTillEOL(line, pos0+1, msg);
      END;
   END;
   RETURN found
@@ -344,7 +344,7 @@ VAR
   i: INTEGER;
   b: BOOLEAN;
 BEGIN
-  sh.zeroStr(username);
+  strutils.zeroStr(username);
   Strings.FindNext("!", user, 0, b, i);
   IF b THEN
     Strings.Extract(user, 0, i, username);
@@ -357,7 +357,7 @@ VAR
   i, j: INTEGER;
   b: BOOLEAN;
 BEGIN
-  sh.zeroStr(ident);
+  strutils.zeroStr(ident);
   Strings.FindNext("~", user, 0, b, i);
   IF b THEN
     Strings.FindNext("@", user, i, b, j);
@@ -373,7 +373,7 @@ VAR
   i: INTEGER;
   b: BOOLEAN;
 BEGIN
-  sh.zeroStr(host);
+  strutils.zeroStr(host);
   Strings.FindNext("@", user, 0, b, i);
   IF b THEN
     Strings.Extract(user, i+1, Strings.Length(user)-i-1, host);
@@ -407,12 +407,12 @@ VAR
 BEGIN
 
   time.Now(year, month, day, hour, minute, second);
-  sh.IntToStr(year, syear);
-  sh.IntToStr(month, smonth);
-  sh.IntToStr(day, sday);
-  sh.IntToStr(hour, shour);
-  sh.IntToStr(minute, sminute);
-  sh.IntToStr(second, ssecond);
+  strutils.IntToStr(year, syear);
+  strutils.IntToStr(month, smonth);
+  strutils.IntToStr(day, sday);
+  strutils.IntToStr(hour, shour);
+  strutils.IntToStr(minute, sminute);
+  strutils.IntToStr(second, ssecond);
 
   COPY(syear, str);
   Strings.Append("-", str);
@@ -440,7 +440,7 @@ VAR
   str0: ARRAY msgLen OF CHAR;
 BEGIN
   IF inst.doLog THEN
-    sh.zeroStr(str);
+    strutils.zeroStr(str);
     Out.String("logging about: "); Out.String(username); Out.String(", "); Out.String(messagetype); Out.String(", "); Out.String(rcpt); Out.Ln;
     i := 0; b := FALSE;
     REPEAT
@@ -459,7 +459,7 @@ BEGIN
             Strings.Append("***", str);
             Strings.Append(username, str);
             Strings.Append(" ", str);
-            sh.getTillEOL(message, j+Strings.Length(msgACTION), str0);
+            strutils.getTillEOL(message, j+Strings.Length(msgACTION), str0);
             Strings.Append(str0, str);
           ELSE
             Strings.Append(username, str);
@@ -527,7 +527,7 @@ BEGIN
   Strings.Append(dst, s^);
   Strings.Append(' :', s^);
   Strings.Append(msg, s^);
-  sh.appendLFCR(s^);
+  strutils.appendLFCR(s^);
   Out.String("sending: "); Out.String(s^); Out.Ln;
   b := Send(inst, s^);
 END sendMsgToDst;
@@ -583,7 +583,7 @@ BEGIN
         rcpt := "";
         message := "";
         Strings.FindNext(":", line, 1, b, i);
-        sh.getTillEOL(line, i, message);
+        strutils.getTillEOL(line, i, message);
      END;
 
      IF (messagetype = msgPART) THEN
@@ -615,9 +615,9 @@ END processFurther;
 PROCEDURE processLineByLine(VAR inst: instance; VAR text: ARRAY OF CHAR);
 VAR
   i : INTEGER;
-  pstrs: sh.pstrings;
+  pstrs: strutils.pstrings;
 BEGIN
-  pstrs := sh.textToPstrings(text);
+  pstrs := strutils.string2pstrings(text);
   i := 0;
   REPEAT
      Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
@@ -639,7 +639,7 @@ BEGIN
     b := FALSE;
   ELSE
     IF isServerMsg(text) THEN (* string starts with ':' *)
-      IF sh.contains1(text, rplWelcome) THEN (* string contains '001' *)
+      IF strutils.contains1(text, rplWelcome) THEN (* string contains '001' *)
          ModeAndJoin(inst);
       ELSE
          processLineByLine(inst, text);
