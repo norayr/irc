@@ -2,7 +2,7 @@ MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
 IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time;
 
 CONST
-  msgLen* = 512; (* message length not more than 512 characters *)
+  msgLen* = 4096; (* message length not more than 512 characters *)
   (* irc commands *)
   cmdPing*      = "PING";
   cmdPong*      = "PONG";
