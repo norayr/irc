@@ -56,6 +56,7 @@ CONST
      callbackPrivate*: cbPrivateMessage;
      callbackPublic*: cbPublicMessage;
      callbackPublicMention*: cbPublicMessageWithMention;
+     startTime: ARRAY 16 OF CHAR;
      doLog : BOOLEAN;
     END;
 
