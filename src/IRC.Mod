@@ -2,7 +2,7 @@ MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
 IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time;
 
 CONST
-  msgLen* = 4096; (* message length not more than 512 characters *)
+  msgLen* = 1024; (* message length not more than 512 characters *)
   (* irc commands *)
   cmdPing*      = "PING";
   cmdPong*      = "PONG";
@@ -33,7 +33,7 @@ CONST
   errClosingLink = "ERROR :Closing Link:";
 
   TYPE
-    chn* = ARRAY 32 OF CHAR;
+    chn* = ARRAY 128 OF CHAR;
 
     Channel*   = RECORD
       channel* : chn;
