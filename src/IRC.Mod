@@ -49,14 +49,14 @@ CONST
     cbPublicMessage*  = PROCEDURE (VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
     cbPublicMessageWithMention* = PROCEDURE(VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR); (* rcpt is usually the room in case of public messages *)
 
-    instance* = RECORD
+    instance* = POINTER TO instanceDesc;
+    instanceDesc* = RECORD
      owner*, user*, nick*, host*, port*: chn;
      connection*: Internet.Socket;
      channelList*: Channels;
      callbackPrivate*: cbPrivateMessage;
      callbackPublic*: cbPublicMessage;
      callbackPublicMention*: cbPublicMessageWithMention;
-     startTime: ARRAY 16 OF CHAR;
      doLog : BOOLEAN;
     END;
 
@@ -64,6 +64,22 @@ CONST
 VAR
   eol- : ARRAY 3 OF CHAR;
   debug: BOOLEAN;
+
+PROCEDURE Create*(owner, user, nick, host, port: chn; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
+VAR
+  inst: instance;
+BEGIN
+  NEW(inst);
+  inst.owner := owner;
+  inst.user := user;
+  inst.nick := nick;
+  inst.host := host;
+  inst.port := port;
+  inst.callbackPrivate := callBackPrv;
+  inst.callbackPublic := callBackPbl;
+  inst.callbackPublicMention := callBackPblMn;
+  RETURN inst
+END Create;
 
 PROCEDURE setLogging*(VAR inst: instance; state: BOOLEAN);
 BEGIN
