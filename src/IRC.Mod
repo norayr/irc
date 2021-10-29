@@ -51,7 +51,8 @@ CONST
 
     instance* = POINTER TO instanceDesc;
     instanceDesc* = RECORD
-     owner*, user*, nick*, host*, port*: chn;
+     owner-, user-, nick-, host-, port-, pass: chn;
+     authenticate: BOOLEAN;
      connection*: Internet.Socket;
      channelList*: Channels;
      callbackPrivate*: cbPrivateMessage;
@@ -65,7 +66,7 @@ VAR
   eol- : ARRAY 3 OF CHAR;
   debug: BOOLEAN;
 
-PROCEDURE Create*(owner, user, nick, host, port: chn; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
+PROCEDURE Create*(owner, user, nick, host, port, pass: chn; auth: BOOLEAN; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
 VAR
   inst: instance;
 BEGIN
@@ -75,6 +76,8 @@ BEGIN
   inst.nick := nick;
   inst.host := host;
   inst.port := port;
+  inst.pass := pass;
+  inst.authenticate := auth;
   inst.callbackPrivate := callBackPrv;
   inst.callbackPublic := callBackPbl;
   inst.callbackPublicMention := callBackPblMn;
@@ -232,8 +235,17 @@ END Send;
 PROCEDURE Auth*(inst: instance): BOOLEAN;
 VAR
   line: ARRAY 255 OF CHAR;
+  pass: ARRAY 16 OF CHAR;
   b : BOOLEAN;
 BEGIN
+  IF inst.authenticate THEN
+     IF inst.doLog THEN Out.String("Authenticating!"); Out.Ln END;
+     COPY ("PASS ", pass);
+     Strings.Append(inst.pass, pass);
+     Strings.Append (eol, pass);
+     b := Internet.Write(inst.connection, pass);
+  END;
+  
   formUserNickLine(inst.user, inst.owner, inst.nick, line);
 
   b := Internet.Write(inst.connection, line);
