@@ -75,9 +75,8 @@ BEGIN
 
 
 
-  NEW(channels, 2);
+  NEW(channels, 1);
   channels[0].channel := "#oberon-test";
-  channels[1].channel := "#pascal-test";
   IRC.setLogging(inst, TRUE);
   IRC.initChannelList(inst, channels);
 
