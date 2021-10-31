@@ -1,5 +1,5 @@
 MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
-IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time;
+IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time, Platform;
 
 CONST
   msgLen* = 4096;
@@ -44,12 +44,12 @@ CONST
     Channels* = POINTER TO ARRAY OF Channel;
 
     msg* = ARRAY msgLen OF CHAR;
-    (*cbMessage* = PROCEDURE(VAR msg : ARRAY OF CHAR);*) (* cb stands for callback *)
-    cbPrivateMessage* = PROCEDURE (VAR msg, msgtype, user, ident, host: ARRAY OF CHAR);
-    cbPublicMessage*  = PROCEDURE (VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
-    cbPublicMessageWithMention* = PROCEDURE(VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR); (* rcpt is usually the room in case of public messages *)
-
     instance* = POINTER TO instanceDesc;
+    (*cbMessage* = PROCEDURE(VAR msg : ARRAY OF CHAR);*) (* cb stands for callback *)
+    cbPrivateMessage* = PROCEDURE (VAR inst: instance; VAR msg, msgtype, user, ident, host: ARRAY OF CHAR);
+    cbPublicMessage*  = PROCEDURE (VAR inst: instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
+    cbPublicMessageWithMention* = PROCEDURE(VAR inst: instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR); (* rcpt is usually the room in case of public messages *)
+
     instanceDesc* = RECORD
      owner-, user-, nick-, host-, port-, pass: chn;
      authenticate: BOOLEAN;
@@ -65,6 +65,171 @@ CONST
 VAR
   eol- : ARRAY 3 OF CHAR;
   debug: BOOLEAN;
+
+PROCEDURE formTimeString(VAR str: ARRAY OF CHAR);
+VAR
+  year, month, day, hour, minute, second: LONGINT;
+  syear, smonth, sday, shour, sminute, ssecond: ARRAY 8 OF CHAR;
+BEGIN
+
+  time.Now(year, month, day, hour, minute, second);
+  strutils.IntToStr(year, syear);
+  strutils.IntToStr(month, smonth);
+  strutils.IntToStr(day, sday);
+  strutils.IntToStr(hour, shour);
+  strutils.IntToStr(minute, sminute);
+  strutils.IntToStr(second, ssecond);
+
+  COPY(syear, str);
+  Strings.Append("-", str);
+  Strings.Append(smonth, str);
+  Strings.Append("-", str);
+  Strings.Append(sday, str);
+  Strings.Append(" (", str);
+  Strings.Append(shour, str);
+  Strings.Append(":", str);
+  Strings.Append(sminute, str);
+  Strings.Append(":", str);
+  Strings.Append(ssecond, str);
+  Strings.Append(") ", str);
+END formTimeString;
+
+PROCEDURE log(VAR inst: instance; message, messagetype, username, identname, rcpt: ARRAY OF CHAR);
+VAR
+  i : INTEGER;
+  b : BOOLEAN;
+  str: ARRAY msgLen OF CHAR;
+  tmp: ARRAY 16 OF CHAR;
+  (* for searching for ACTION *)
+  b0: BOOLEAN;
+  j:  INTEGER;
+  str0: ARRAY msgLen OF CHAR;
+BEGIN
+  IF inst.doLog THEN
+    strutils.zeroStr(str);
+    Out.String("logging about: "); Out.String(username); Out.String(", "); Out.String(messagetype); Out.String(", "); Out.String(rcpt); Out.Ln;
+    i := 0; b := FALSE;
+    REPEAT
+      Out.String("is "); Out.String(inst.channelList^[i].channel); Out.String("="); Out.String(rcpt); Out.String("?"); Out.Ln;
+      IF inst.channelList^[i].channel = rcpt THEN b := TRUE END;
+      INC(i);
+    UNTIL (i = LEN(inst.channelList^)) OR b;
+    IF b THEN Out.String("yes!") ELSE Out.String("no!") END; Out.Ln;
+    IF b OR (messagetype = msgPART) THEN (* we don't know from which channel user quits so we only write to log about it when he parts. *)
+      DEC(i);
+      formTimeString(str);
+        IF messagetype = msgPRIVMSG THEN
+          b0 := FALSE;
+          Strings.FindNext(msgACTION, message, 1, b0, j);
+          IF b0 THEN (* handle actions *)
+            Strings.Append("***", str);
+            Strings.Append(username, str);
+            Strings.Append(" ", str);
+            strutils.getTillEOL(message, j+Strings.Length(msgACTION), str0);
+            Strings.Append(str0, str);
+          ELSE
+            Strings.Append(username, str);
+            tmp := ": ";
+            Strings.Append(tmp, str);
+            Strings.Append(message, str);
+          END;
+      ELSIF messagetype = msgJOIN THEN
+        Strings.Append(username, str);
+        tmp := " joined ";
+        Strings.Append (tmp, str);
+        Strings.Append (rcpt, str);
+      ELSIF (messagetype = msgPART) THEN
+        Strings.Append(username, str);
+        tmp := " has quit";
+        Strings.Append(tmp, str);
+      END;
+      Out.String("writing to "); Out.String(rcpt); Out.String(" log: "); Out.String(str); Out.Ln;
+      Files.WriteString(inst.channelList^[i].rider, str);
+      Files.Set(inst.channelList^[i].rider, inst.channelList^[i].logfile, Files.Pos(inst.channelList^[i].rider)-1); Files.Write(inst.channelList^[i].rider, 0AX);
+      Files.Register(inst.channelList^[i].logfile);
+    END;
+  END; (* if do log *)
+END log;
+
+PROCEDURE Receive*(VAR inst: instance; VAR str: ARRAY OF CHAR): BOOLEAN;
+VAR
+  b: BOOLEAN;
+BEGIN
+  strutils.zeroStr(str);
+  b := Internet.Read(inst.connection, str);
+  IF b THEN
+    Out.String("received: '");
+    Out.String(str); Out.String("'"); Out.Ln;
+  ELSE
+    Out.String("receive failed"); Out.Ln;
+  END;
+  RETURN b
+END Receive;
+
+PROCEDURE Send*(VAR inst: instance; str: ARRAY OF CHAR): BOOLEAN;
+VAR
+  b : BOOLEAN;
+BEGIN
+  b := Internet.Write(inst.connection, str);
+  IF b THEN
+    Out.String("sent:"); Out.Ln;
+    Out.String(str); Out.Ln;
+  ELSE
+    Out.String("sending failed"); Out.Ln;
+  END;
+  RETURN b
+END Send;
+
+PROCEDURE Connect*(VAR inst: instance): BOOLEAN;
+VAR
+  res: BOOLEAN;
+BEGIN
+  res := Internet.Connect(inst.host, inst.port, inst.connection);
+  RETURN res
+END Connect;
+
+PROCEDURE Disconnect*(VAR inst: instance);
+BEGIN
+  Internet.Disconnect(inst.connection);
+END Disconnect;
+
+PROCEDURE Pong(VAR inst: instance; VAR line: ARRAY OF CHAR);
+VAR
+  tmp: ARRAY msgLen OF CHAR;
+  b : BOOLEAN;
+BEGIN
+      strutils.cutLine(line, tmp);
+      tmp[1] := 'O'; (* replace "PING" by "PONG" *)
+      b := Send(inst, tmp);
+END Pong;
+
+PROCEDURE finalize*(VAR inst: instance);
+VAR
+  i: INTEGER;
+  l: LONGINT;
+  b: BOOLEAN;
+  msg: ARRAY 23 OF CHAR;
+BEGIN
+  IF inst.doLog THEN
+  i := 0;
+  REPEAT
+    Out.String("flushing "); Out.String(inst.channelList^[i].channel); Out.String(" file."); Out.Ln;
+    Files.Register(inst.channelList^[i].logfile);
+    Files.Close(inst.channelList^[i].logfile);
+    INC(i)
+  UNTIL i = LEN(inst.channelList^);
+  END;
+    Out.String("quitting."); Out.Ln;
+  msg := "QUIT :interrupt";
+  l := Strings.Length(msg);
+  msg[l] := LF;
+  msg[l+1] := CR;
+  msg[l+2] := 0X;
+  Out.String("closing connection."); Out.Ln;
+    b := Send(inst, msg);
+  Disconnect(inst);
+  Out.String("exiting."); Out.Ln;
+END finalize;
 
 PROCEDURE Create*(owner, user, nick, host, port, pass: chn; auth: BOOLEAN; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
 VAR
@@ -110,7 +275,6 @@ BEGIN
   Strings.Append(" ", res);
   Strings.Append (nick, res);
   Strings.Append(eol, res);
-
 END formUserNickLine;
 
 PROCEDURE formModeLine(VAR str, nick: ARRAY OF CHAR);
@@ -181,8 +345,6 @@ BEGIN
   RETURN b
 END error;
 
-(* instance functions *)
-
 PROCEDURE initChannelList*(VAR inst: instance; VAR channels: Channels);
 VAR
   i : INTEGER;
@@ -202,35 +364,6 @@ BEGIN
   END;
   inst.channelList := channels;
 END initChannelList;
-
-PROCEDURE Receive*(VAR inst: instance; VAR str: ARRAY OF CHAR): BOOLEAN;
-VAR
-  b: BOOLEAN;
-BEGIN
-  strutils.zeroStr(str);
-  b := Internet.Read(inst.connection, str);
-  IF b THEN
-    Out.String("received: '");
-    Out.String(str); Out.String("'"); Out.Ln;
-  ELSE
-    Out.String("receive failed"); Out.Ln;
-  END;
-  RETURN b
-END Receive;
-
-PROCEDURE Send*(VAR inst: instance; str: ARRAY OF CHAR): BOOLEAN;
-VAR
-  b : BOOLEAN;
-BEGIN
-  b := Internet.Write(inst.connection, str);
-  IF b THEN
-    Out.String("sent:"); Out.Ln;
-    Out.String(str); Out.Ln;
-  ELSE
-    Out.String("sending failed"); Out.Ln;
-  END;
-  RETURN b
-END Send;
 
 PROCEDURE Auth*(inst: instance): BOOLEAN;
 VAR
@@ -252,29 +385,6 @@ BEGIN
 
   RETURN b
 END Auth;
-
-PROCEDURE Connect*(VAR inst: instance): BOOLEAN;
-VAR
-  res: BOOLEAN;
-BEGIN
-  res := Internet.Connect(inst.host, inst.port, inst.connection);
-  RETURN res
-END Connect;
-
-PROCEDURE Disconnect*(VAR inst: instance);
-BEGIN
-  Internet.Disconnect(inst.connection);
-END Disconnect;
-
-PROCEDURE Pong(VAR inst: instance; VAR line: ARRAY OF CHAR);
-VAR
-  tmp: ARRAY msgLen OF CHAR;
-  b : BOOLEAN;
-BEGIN
-      strutils.cutLine(line, tmp);
-      tmp[1] := 'O'; (* replace "PING" by "PONG" *)
-      b := Send(inst, tmp);
-END Pong;
 
 PROCEDURE Mode*(VAR inst: instance);
 VAR
@@ -428,120 +538,6 @@ BEGIN
  Strings.Delete(msg, 0, Strings.Length(nick) + 2);
 END cutMentionFromMessage;
 
-
-PROCEDURE formTimeString(VAR str: ARRAY OF CHAR);
-VAR
-  year, month, day, hour, minute, second: LONGINT;
-  syear, smonth, sday, shour, sminute, ssecond: ARRAY 8 OF CHAR;
-BEGIN
-
-  time.Now(year, month, day, hour, minute, second);
-  strutils.IntToStr(year, syear);
-  strutils.IntToStr(month, smonth);
-  strutils.IntToStr(day, sday);
-  strutils.IntToStr(hour, shour);
-  strutils.IntToStr(minute, sminute);
-  strutils.IntToStr(second, ssecond);
-
-  COPY(syear, str);
-  Strings.Append("-", str);
-  Strings.Append(smonth, str);
-  Strings.Append("-", str);
-  Strings.Append(sday, str);
-  Strings.Append(" (", str);
-  Strings.Append(shour, str);
-  Strings.Append(":", str);
-  Strings.Append(sminute, str);
-  Strings.Append(":", str);
-  Strings.Append(ssecond, str);
-  Strings.Append(") ", str);
-END formTimeString;
-
-PROCEDURE log(VAR inst: instance; message, messagetype, username, identname, rcpt: ARRAY OF CHAR);
-VAR
-  i : INTEGER;
-  b : BOOLEAN;
-  str: ARRAY msgLen OF CHAR;
-  tmp: ARRAY 16 OF CHAR;
-  (* for searching for ACTION *)
-  b0: BOOLEAN;
-  j:  INTEGER;
-  str0: ARRAY msgLen OF CHAR;
-BEGIN
-  IF inst.doLog THEN
-    strutils.zeroStr(str);
-    Out.String("logging about: "); Out.String(username); Out.String(", "); Out.String(messagetype); Out.String(", "); Out.String(rcpt); Out.Ln;
-    i := 0; b := FALSE;
-    REPEAT
-      Out.String("is "); Out.String(inst.channelList^[i].channel); Out.String("="); Out.String(rcpt); Out.String("?"); Out.Ln;
-      IF inst.channelList^[i].channel = rcpt THEN b := TRUE END;
-      INC(i);
-    UNTIL (i = LEN(inst.channelList^)) OR b;
-    IF b THEN Out.String("yes!") ELSE Out.String("no!") END; Out.Ln;
-    IF b OR (messagetype = msgPART) THEN (* we don't know from which channel user quits so we only write to log about it when he parts. *)
-      DEC(i);
-      formTimeString(str);
-        IF messagetype = msgPRIVMSG THEN
-          b0 := FALSE;
-          Strings.FindNext(msgACTION, message, 1, b0, j);
-          IF b0 THEN (* handle actions *)
-            Strings.Append("***", str);
-            Strings.Append(username, str);
-            Strings.Append(" ", str);
-            strutils.getTillEOL(message, j+Strings.Length(msgACTION), str0);
-            Strings.Append(str0, str);
-          ELSE
-            Strings.Append(username, str);
-            tmp := ": ";
-            Strings.Append(tmp, str);
-            Strings.Append(message, str);
-          END;
-      ELSIF messagetype = msgJOIN THEN
-        Strings.Append(username, str);
-        tmp := " joined ";
-        Strings.Append (tmp, str);
-        Strings.Append (rcpt, str);
-      ELSIF (messagetype = msgPART) THEN
-        Strings.Append(username, str);
-        tmp := " has quit";
-        Strings.Append(tmp, str);
-      END;
-      Out.String("writing to "); Out.String(rcpt); Out.String(" log: "); Out.String(str); Out.Ln;
-      Files.WriteString(inst.channelList^[i].rider, str);
-      Files.Set(inst.channelList^[i].rider, inst.channelList^[i].logfile, Files.Pos(inst.channelList^[i].rider)-1); Files.Write(inst.channelList^[i].rider, 0AX);
-      Files.Register(inst.channelList^[i].logfile);
-    END;
-  END; (* if do log *)
-END log;
-
-PROCEDURE finalize*(VAR inst: instance);
-VAR
-  i: INTEGER;
-  l: LONGINT;
-  b: BOOLEAN;
-  msg: ARRAY 23 OF CHAR;
-BEGIN
-  IF inst.doLog THEN
-  i := 0;
-  REPEAT
-    Out.String("flushing "); Out.String(inst.channelList^[i].channel); Out.String(" file."); Out.Ln;
-    Files.Register(inst.channelList^[i].logfile);
-    Files.Close(inst.channelList^[i].logfile);
-    INC(i)
-  UNTIL i = LEN(inst.channelList^);
-  END;
-    Out.String("quitting."); Out.Ln;
-  msg := "QUIT :interrupt";
-  l := Strings.Length(msg);
-  msg[l] := LF;
-  msg[l+1] := CR;
-  msg[l+2] := 0X;
-  Out.String("closing connection."); Out.Ln;
-    b := Send(inst, msg);
-  Disconnect(inst);
-  Out.String("exiting."); Out.Ln;
-END finalize;
-
 PROCEDURE sendMsgToDst*(VAR inst: instance; VAR dst: ARRAY OF CHAR; msg: ARRAY OF CHAR);
 VAR
   s: POINTER TO ARRAY OF CHAR;
@@ -624,16 +620,16 @@ BEGIN
      END;
 
      IF rcpt = inst.nick THEN (* private message *)
-       inst.callbackPrivate(message, messagetype, username, identname, host);
+       inst.callbackPrivate(inst, message, messagetype, username, identname, host);
      ELSE
        mn := isMention(inst.nick, message); 
        IF mn THEN
          log(inst, message, messagetype, username, identname, rcpt);
          cutMentionFromMessage(inst.nick, message); 
-         inst.callbackPublicMention(message, messagetype, username, identname, rcpt, host);
+         inst.callbackPublicMention(inst, message, messagetype, username, identname, rcpt, host);
        ELSE
          log(inst, message, messagetype, username, identname, rcpt);
-         inst.callbackPublic(message, messagetype, username, identname, rcpt, host);
+         inst.callbackPublic(inst, message, messagetype, username, identname, rcpt, host);
        END;
      END;
   ELSE
@@ -707,7 +703,8 @@ BEGIN
     
     IF connectionOK THEN
       b2 := processResponse(inst, txt);
-    END
+    END;
+
   UNTIL ~b OR ~b2 OR (i = numOfFailed);
 END Loop;
 
