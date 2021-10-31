@@ -2,7 +2,7 @@ MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
 IMPORT Out, Files, Strings := ooc2Strings, strutils, netTypes, Internet, time;
 
 CONST
-  msgLen* = 1024; (* message length not more than 512 characters *)
+  msgLen* = 4096;
   (* irc commands *)
   cmdPing*      = "PING";
   cmdPong*      = "PONG";
@@ -679,14 +679,36 @@ BEGIN
 END processResponse;
 
 PROCEDURE Loop*(VAR inst: instance);
+CONST numOfFailed = 10;
 VAR
   b, b2 : BOOLEAN;
   txt : ARRAY msgLen OF CHAR;
+  i: INTEGER; connectionOK: BOOLEAN;
 BEGIN
+  i := 0; connectionOK := TRUE;
   REPEAT
     b := Receive(inst, txt);
-    b2 := processResponse(inst, txt);
-  UNTIL ~b OR ~b2;
+
+    (* hopefully disconnects will be handled like this
+       i have noticed that during some disconnects
+       bot receives many empty strings one after the other *)
+    IF txt = "" THEN
+      i := 0; connectionOK := FALSE;
+      REPEAT
+        b := Receive(inst, txt);
+        IF txt = "" THEN
+          INC(i)
+        ELSE
+          connectionOK := TRUE;
+          i := 0;
+        END
+      UNTIL connectionOK OR (i = numOfFailed);
+    END;
+    
+    IF connectionOK THEN
+      b2 := processResponse(inst, txt);
+    END
+  UNTIL ~b OR ~b2 OR (i = numOfFailed);
 END Loop;
 
 PROCEDURE setDebug*(state: BOOLEAN);
