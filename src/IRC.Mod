@@ -568,15 +568,17 @@ VAR
   mn: BOOLEAN;
   i: INTEGER;
 BEGIN
+       Out.String("entered processFurther"); Out.Ln;
   i := 0; mn := FALSE; b := FALSE;
   b := getUser(line, userpart);
   b := getMsgType(line, messagetype);
-
+       Out.String("identified message type"); Out.Ln;
   IF (messagetype = msgNOTICE) OR (messagetype = msgJOIN) OR
      (messagetype = msgQUIT)   OR (messagetype = msgPRIVMSG) OR
      (messagetype = msgPART) THEN
 
      IF messagetype = msgPRIVMSG THEN
+                            Out.String("it's PRIVMSG"); Out.Ln;
         b := getUserName(userpart, username);
         b := getIdentName(userpart, identname);
         b := getHost(userpart, host);
@@ -585,6 +587,7 @@ BEGIN
      END;
 
      IF messagetype = msgNOTICE THEN
+                            Out.String("it's NOTICE"); Out.Ln;
         username := "";
         identname := "";
         host := userpart;
@@ -594,6 +597,7 @@ BEGIN
      END;
 
      IF messagetype = msgJOIN THEN
+                            Out.String("it's JOIN"); Out.Ln;
         b := getUserName(userpart, username);
         b := getIdentName(userpart, identname);
         b := getHost(userpart, host);
@@ -602,6 +606,7 @@ BEGIN
      END;
 
      IF (messagetype = msgQUIT) THEN
+                            Out.String("it's QUIT"); Out.Ln;
         b := getUserName(userpart, username);
         b := getIdentName(userpart, identname);
         b := getHost(userpart, host);
@@ -612,6 +617,7 @@ BEGIN
      END;
 
      IF (messagetype = msgPART) THEN
+                            Out.String("it's PART"); Out.Ln;
         b := getUserName(userpart, username);
         b := getIdentName(userpart, identname);
         b := getHost(userpart, host);
@@ -620,15 +626,18 @@ BEGIN
      END;
 
      IF rcpt = inst.nick THEN (* private message *)
+                 Out.String("calling inst.callbackPrivate"); Out.Ln;
        inst.callbackPrivate(inst, message, messagetype, username, identname, host);
      ELSE
        mn := isMention(inst.nick, message); 
        IF mn THEN
          log(inst, message, messagetype, username, identname, rcpt);
          cutMentionFromMessage(inst.nick, message); 
+                      Out.String("calling callbackPublicMention"); Out.Ln;
          inst.callbackPublicMention(inst, message, messagetype, username, identname, rcpt, host);
        ELSE
          log(inst, message, messagetype, username, identname, rcpt);
+                       Out.String("calling callbackPublic"); Out.Ln;
          inst.callbackPublic(inst, message, messagetype, username, identname, rcpt, host);
        END;
      END;
@@ -642,11 +651,15 @@ VAR
   i : INTEGER;
   pstrs: strutils.pstrings;
 BEGIN
+                    Out.String("calling string2pstrings"); Out.Ln;
   pstrs := strutils.string2pstrings(text);
+                    Out.String("call finished without a crash (:"); Out.Ln;
   i := 0;
   REPEAT
      Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
+                           Out.String("calling processFurther"); Out.Ln;
      processFurther(inst, pstrs^[i]^);
+                           Out.String("processFurther exited"); Out.Ln;
      INC(i)
   UNTIL i = LEN(pstrs^);
 END processLineByLine;
@@ -655,19 +668,25 @@ PROCEDURE processResponse(VAR inst: instance; VAR text: ARRAY OF CHAR): BOOLEAN;
 VAR
   b : BOOLEAN;
 BEGIN
+                         Out.String("entered processResponse"); Out.Ln;
   b := TRUE;
   IF isPing(text) THEN
     Pong(inst, text);
   END;
   IF error(text) THEN
+                          Out.String("it's error"); Out.Ln;
     finalize(inst);
     b := FALSE;
   ELSE
     IF isServerMsg(text) THEN (* string starts with ':' *)
+                             Out.String("it's servermsg"); Out.Ln;
       IF strutils.contains1(text, rplWelcome) THEN (* string contains '001' *)
+                             Out.String("call modeandjoin"); Out.Ln;
          ModeAndJoin(inst);
       ELSE
+                             Out.String("calling processLineByLine"); Out.Ln;
          processLineByLine(inst, text);
+                             Out.String("processLineByLine exited"); Out.Ln;
       END;
     END;
   END;
