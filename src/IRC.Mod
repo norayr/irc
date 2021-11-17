@@ -588,7 +588,7 @@ BEGIN
         username := "";
         identname := "";
         host := userpart;
-        Strings.Delete(host, 0, 1);
+        IF host[0] = ':' THEN Strings.Delete(host, 0, 1); END;
         b := getRecipient(line, rcpt);
         b := getMsg(line, message);
      END;
