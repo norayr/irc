@@ -6,7 +6,7 @@ current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
 
 all:
 			mkdir -p $(BUILD)
-			cd $(BUILD) && voc -s \
+			cd $(BUILD) && $(VOC) -s \
 			$(mkfile_dir_path)/src/IRC.Mod
 
 clean:
