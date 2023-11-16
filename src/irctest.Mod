@@ -3,7 +3,7 @@ MODULE irctest; (* noch 13.4.2017 / 18.5.2017*)
 IMPORT IRC, Out, Strings := ooc2Strings, Platform;
 
 (* i am moving these to global section to make possible for interrupt handler to access instance *)
-VAR 
+VAR
   inst: IRC.instance;
   channels : IRC.Channels;
   b: BOOLEAN;
