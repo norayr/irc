@@ -3,6 +3,7 @@ IMPORT Out, Files, Strings := ooc2Strings, strUtils, netTypes, Internet, time, P
 
 CONST
   msgLen* = 513; (* well irc msg len is 512 *)
+  waitTime = 23000; (* wait 23 seconds before reconnect *)
   (* irc commands *)
   cmdPing*      = "PING";
   cmdPong*      = "PONG";
@@ -151,6 +152,19 @@ BEGIN
   END; (* if do log *)
 END log;
 
+PROCEDURE Connect*(VAR inst: instance): BOOLEAN;
+VAR
+  res: BOOLEAN;
+BEGIN
+  res := Internet.Connect(inst.host, inst.port, inst.connection);
+  RETURN res
+END Connect;
+
+PROCEDURE Disconnect*(VAR inst: instance);
+BEGIN
+  Internet.Disconnect(inst.connection);
+END Disconnect;
+
 PROCEDURE Receive*(VAR inst: instance; VAR str: ARRAY OF CHAR): BOOLEAN;
 VAR
   b: BOOLEAN;
@@ -179,19 +193,6 @@ BEGIN
   END;
   RETURN b
 END Send;
-
-PROCEDURE Connect*(VAR inst: instance): BOOLEAN;
-VAR
-  res: BOOLEAN;
-BEGIN
-  res := Internet.Connect(inst.host, inst.port, inst.connection);
-  RETURN res
-END Connect;
-
-PROCEDURE Disconnect*(VAR inst: instance);
-BEGIN
-  Internet.Disconnect(inst.connection);
-END Disconnect;
 
 PROCEDURE Pong(VAR inst: instance; VAR line: ARRAY OF CHAR);
 VAR
@@ -710,7 +711,7 @@ BEGIN
 END processResponse;
 
 PROCEDURE Loop*(VAR inst: instance);
-CONST numOfFailed = 10;
+CONST numOfFailed = 1024;
 VAR
   b, b2 : BOOLEAN;
   txt : ARRAY msgLen OF CHAR;
@@ -719,27 +720,33 @@ BEGIN
   i := 0; connectionOK := TRUE;
   REPEAT
     b := Receive(inst, txt);
+      (* hopefully disconnects will be handled like this
+         i have noticed that during some disconnects
+         bot receives many empty strings one after the other *)
+      IF ~b THEN
+        i := 0; connectionOK := FALSE;
+        REPEAT
+          b := Receive(inst, txt);
+          IF ~b THEN
+            INC(i)
+          ELSE
+            connectionOK := TRUE;
+            i := 0;
+          END;
+          IF ~connectionOK THEN
+            Disconnect(inst);
+            Platform.Delay(waitTime);
+            REPEAT
+              b := Connect(inst);
+              IF ~b THEN INC(i); Platform.Delay(waitTime) END;
+            UNTIL b OR (i = numOfFailed);
+          END;
+        UNTIL connectionOK OR (i = numOfFailed);
+      END;
 
-    (* hopefully disconnects will be handled like this
-       i have noticed that during some disconnects
-       bot receives many empty strings one after the other *)
-    IF txt = "" THEN
-      i := 0; connectionOK := FALSE;
-      REPEAT
-        b := Receive(inst, txt);
-        IF txt = "" THEN
-          INC(i)
-        ELSE
-          connectionOK := TRUE;
-          i := 0;
-        END
-      UNTIL connectionOK OR (i = numOfFailed);
-    END;
-
-    IF connectionOK THEN
-      b2 := processResponse(inst, txt);
-    END;
-
+      IF connectionOK THEN
+        b2 := processResponse(inst, txt);
+      END;
   UNTIL ~b OR ~b2 OR (i = numOfFailed);
 END Loop;
 
