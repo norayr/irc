@@ -663,7 +663,7 @@ BEGIN
   IF parts # NIL THEN
     IF Strings.Length(parts^[0]^) >= 2 THEN
       code := parts^[1];
-      RETURN Strings.Compare(code^, "rplWelcome") = 0;
+      RETURN Strings.Compare(code^, rplWelcome) = 0;
     END;
   END;
   RETURN FALSE;
