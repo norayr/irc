@@ -12,13 +12,13 @@ VAR
 (*
 PROCEDURE onMessage(VAR msg : ARRAY OF CHAR);
 BEGIN
-   Out.String("callback procedure is running, youhoo!"); Out.Ln; 
+   Out.String("callback procedure is running, youhoo!"); Out.Ln;
    Out.String("input:"); Out.Ln;
    Out.String(msg); Out.String("|"); Out.Ln;
    Out.Ln;
 END onMessage;
 *)
-PROCEDURE onPrivateMessage(VAR msg, msgtype, user, ident, host: ARRAY OF CHAR);
+PROCEDURE onPrivateMessage(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, host: ARRAY OF CHAR);
 BEGIN
   Out.String("*** private message ***"); Out.Ln;
   Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
@@ -30,7 +30,7 @@ BEGIN
   IRC.sendMsgToDst(inst, user, "hello, nice to meet you");
 END onPrivateMessage;
 
-PROCEDURE onPublicMessage(VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
+PROCEDURE onPublicMessage(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
 BEGIN
   Out.String("*** public message ***"); Out.Ln;
   Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
@@ -43,7 +43,7 @@ BEGIN
   IF msgtype # IRC.msgJOIN THEN IRC.sendMsgToDst(inst, rcpt, "test back") END;
 END onPublicMessage;
 
-PROCEDURE onPublicMessageWithMention(VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
+PROCEDURE onPublicMessageWithMention(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
 BEGIN
   Out.String("*** public message, bot name mentioned ***"); Out.Ln;
   Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
@@ -64,6 +64,11 @@ BEGIN
 END interrupt;
 
 BEGIN
+  (* should call
+  Create(owner: chn; user: chn; nick: chn; host: chn; port: chn; pass: chn; auth: BOOLEAN; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
+  *)
+  inst := IRC.Create("norayr_tanakian", "norayr_tanakian", "oberonbot", "irc.libera.chat", "6667", "aaa", FALSE, onPrivateMessage, onPublicMessage, onPublicMessageWithMention);
+  (* old usage
   inst.owner := "norayr_tanakian";
   inst.user := "norayr_tanakian";
   inst.nick := "vocbot";
@@ -72,7 +77,7 @@ BEGIN
   inst.callbackPrivate := onPrivateMessage;
   inst.callbackPublic := onPublicMessage;
   inst.callbackPublicMention := onPublicMessageWithMention;
-
+  *)
 
 
   NEW(channels, 1);
@@ -88,3 +93,4 @@ BEGIN
   END;
 
 END irctest.
+

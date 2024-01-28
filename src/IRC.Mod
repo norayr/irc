@@ -2,7 +2,7 @@ MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
 IMPORT Out, Files, Strings := ooc2Strings, strUtils, netTypes, Internet, time, Platform;
 
 CONST
-  msgLen* = 4096;
+  msgLen* = 513; (* well irc msg len is 512 *)
   (* irc commands *)
   cmdPing*      = "PING";
   cmdPong*      = "PONG";
@@ -378,7 +378,7 @@ BEGIN
      Strings.Append (eol, pass);
      b := Internet.Write(inst.connection, pass);
   END;
-  
+
   formUserNickLine(inst.user, inst.owner, inst.nick, line);
 
   b := Internet.Write(inst.connection, line);
@@ -622,10 +622,10 @@ BEGIN
      IF rcpt = inst.nick THEN (* private message *)
        inst.callbackPrivate(inst, message, messagetype, username, identname, host);
      ELSE
-       mn := isMention(inst.nick, message); 
+       mn := isMention(inst.nick, message);
        IF mn THEN
          log(inst, message, messagetype, username, identname, rcpt);
-         cutMentionFromMessage(inst.nick, message); 
+         cutMentionFromMessage(inst.nick, message);
          inst.callbackPublicMention(inst, message, messagetype, username, identname, rcpt, host);
        ELSE
          log(inst, message, messagetype, username, identname, rcpt);
@@ -651,6 +651,24 @@ BEGIN
   UNTIL i = LEN(pstrs^);
 END processLineByLine;
 
+PROCEDURE isWelcomeMessage(text: ARRAY OF CHAR): BOOLEAN;
+VAR
+  parts: strUtils.pstrings;
+  code: strUtils.pstring;
+BEGIN
+  (* Split 'text' into parts based on spaces *)
+  parts := strUtils.tokenize(text, ' ');
+
+  (* Check if the message has enough parts to be a valid IRC message *)
+  IF parts # NIL THEN
+    IF Strings.Length(parts^[0]^) >= 2 THEN
+      code := parts^[1];
+      RETURN Strings.Compare(code^, "rplWelcome") = 0;
+    END;
+  END;
+  RETURN FALSE;
+END isWelcomeMessage;
+
 PROCEDURE processResponse(VAR inst: instance; VAR text: ARRAY OF CHAR): BOOLEAN;
 VAR
   b : BOOLEAN;
@@ -664,7 +682,7 @@ BEGIN
     b := FALSE;
   ELSE
     IF isServerMsg(text) THEN (* string starts with ':' *)
-      IF strUtils.contains1(text, rplWelcome) THEN (* string contains '001' *)
+      IF isWelcomeMessage(text) THEN
          ModeAndJoin(inst);
       ELSE
          processLineByLine(inst, text);
@@ -700,7 +718,7 @@ BEGIN
         END
       UNTIL connectionOK OR (i = numOfFailed);
     END;
-    
+
     IF connectionOK THEN
       b2 := processResponse(inst, txt);
     END;

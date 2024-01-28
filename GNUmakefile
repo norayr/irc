@@ -1,14 +1,54 @@
+DEPEND = github.com/norayr/time github.com/norayr/Internet github.com/norayr/strutils
+
 VOC = /opt/voc/bin/voc
-BUILD=build
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 mkfile_dir_path := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+$(info $$mkfile_path is [${mkfile_path}])
+$(info $$mkfile_dir_path is [${mkfile_dir_path}])
+ifndef BUILD
+BUILD="build"
+endif
+build_dir_path := $(mkfile_dir_path)/$(BUILD)
 current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
+BLD := $(mkfile_dir_path)/build
+DPD  =  deps
+ifndef DPS
+DPS := $(mkfile_dir_path)/$(DPD)
+endif
+all: get_deps build_deps buildThis
 
+get_deps:
+	@for i in $(DEPEND); do \
+			if [ -d "$(DPS)/$${i}" ]; then \
+				 cd "$(DPS)/$${i}"; \
+				 git pull; \
+				 cd - ;    \
+				 else \
+				 mkdir -p "$(DPS)/$${i}"; \
+				 cd "$(DPS)/$${i}"; \
+				 cd .. ; \
+				 git clone "https://$${i}"; \
+				 cd - ; \
+			fi; \
+	done
 
-all:
-			mkdir -p $(BUILD)
-			cd $(BUILD) && $(VOC) -s \
-			$(mkfile_dir_path)/src/IRC.Mod
+build_deps:
+	mkdir -p $(BLD)
+	cd $(BLD); \
+	for i in $(DEPEND); do \
+		if [ -f "$(DPS)/$${i}/GNUmakefile" ]; then \
+			make -f "$(DPS)/$${i}/GNUmakefile" BUILD=$(BLD); \
+		else \
+			make -f "$(DPS)/$${i}/Makefile" BUILD=$(BLD); \
+		fi; \
+	done
+
+buildThis:
+	cd $(BUILD) && $(VOC) -s $(mkfile_dir_path)/src/IRC.Mod
+
+tests:
+	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/src/irctest.Mod -m
+	#build/testList
 
 clean:
-			if [ -d "$(BUILD)" ]; then rm -rf $(BUILD); fi
+	if [ -d "$(BUILD)" ]; then rm -rf $(BLD); fi
