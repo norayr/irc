@@ -662,8 +662,10 @@ BEGIN
 
   (* Check if the message has enough parts to be a valid IRC message *)
   IF parts # NIL THEN
+      Out.String("length of parts array is "); Out.Int(LEN(parts^), 0); Out.Ln;
     IF LEN(parts^) >= 2 THEN
       code := parts^[1];
+         Out.String("comparing "); Out.String(code^); Out.String(" to 001"); Out.Ln;
       RETURN Strings.Compare(code^, rplWelcome) = 0;
     END;
   END;
@@ -679,12 +681,14 @@ BEGIN
   r := FALSE;
   pstrs := strUtils.string2pstrings(text);
   i := 0;
-  REPEAT
-     Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
-     r := isWelcomeMessage1(pstrs^[i]^);
-     INC(i)
-  UNTIL r OR (i = LEN(pstrs^));
-  RETURN r
+  IF pstrs # NIL THEN
+    REPEAT
+       Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
+       r := isWelcomeMessage1(pstrs^[i]^);
+       INC(i)
+    UNTIL r OR (i = LEN(pstrs^));
+  END;
+    RETURN r
 END isWelcomeMessage;
 
 PROCEDURE processResponse(VAR inst: instance; VAR text: ARRAY OF CHAR): BOOLEAN;
