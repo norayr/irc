@@ -651,7 +651,7 @@ BEGIN
   UNTIL i = LEN(pstrs^);
 END processLineByLine;
 
-PROCEDURE isWelcomeMessage(text: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE isWelcomeMessage1(text: ARRAY OF CHAR): BOOLEAN;
 VAR
   parts: strUtils.pstrings;
   code: strUtils.pstring;
@@ -667,6 +667,23 @@ BEGIN
     END;
   END;
   RETURN FALSE;
+END isWelcomeMessage1;
+
+PROCEDURE isWelcomeMessage(text: ARRAY OF CHAR): BOOLEAN;
+VAR
+  i : INTEGER;
+  pstrs: strUtils.pstrings;
+  r: BOOLEAN;
+BEGIN
+  r := FALSE;
+  pstrs := strUtils.string2pstrings(text);
+  i := 0;
+  REPEAT
+     Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
+     r := isWelcomeMessage1(pstrs^[i]^);
+     INC(i)
+  UNTIL r OR (i = LEN(pstrs^));
+  RETURN r
 END isWelcomeMessage;
 
 PROCEDURE processResponse(VAR inst: instance; VAR text: ARRAY OF CHAR): BOOLEAN;
