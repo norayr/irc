@@ -1,5 +1,6 @@
 MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
-IMPORT Out, Files, Strings := ooc2Strings, strUtils, netTypes, Internet, time, Platform;
+IMPORT Out, Files, Strings := ooc2Strings, Platform,
+       strUtils, netTypes, Internet, time, dbg;
 
 CONST
   msgLen* = 11711; (* well irc msg len is 512, but we get in the buffer several messages. 11711 should be enough for 23 full lines *)
@@ -65,7 +66,6 @@ CONST
 
 VAR
   eol- : ARRAY 3 OF CHAR;
-  debug: BOOLEAN;
 
 PROCEDURE formTimeString(VAR str: ARRAY OF CHAR);
 VAR
@@ -108,7 +108,7 @@ VAR
 BEGIN
   IF inst.doLog THEN
     strUtils.zeroStr(str);
-    Out.String("logging about: "); Out.String(username); Out.String(", "); Out.String(messagetype); Out.String(", "); Out.String(rcpt); Out.Ln;
+    dbg.msg("logging about: "); Out.String(username); Out.String(", "); Out.String(messagetype); Out.String(", "); Out.String(rcpt); Out.Ln;
     i := 0; b := FALSE;
     REPEAT
       Out.String("is "); Out.String(inst.channelList^[i].channel); Out.String("="); Out.String(rcpt); Out.String("?"); Out.Ln;
@@ -156,12 +156,14 @@ PROCEDURE Connect*(VAR inst: instance): BOOLEAN;
 VAR
   res: BOOLEAN;
 BEGIN
+         dbg.enter("Connect");
   res := Internet.Connect(inst.host, inst.port, inst.connection);
   RETURN res
 END Connect;
 
 PROCEDURE Disconnect*(VAR inst: instance);
 BEGIN
+         dbg.enter("Disconnect");
   Internet.Disconnect(inst.connection);
 END Disconnect;
 
@@ -169,14 +171,10 @@ PROCEDURE Receive*(VAR inst: instance; VAR str: ARRAY OF CHAR): BOOLEAN;
 VAR
   b: BOOLEAN;
 BEGIN
+         dbg.enter("Receive");
   strUtils.zeroStr(str);
   b := Internet.Read(inst.connection, str);
-  IF b THEN
-    Out.String("received: '");
-    Out.String(str); Out.String("'"); Out.Ln;
-  ELSE
-    Out.String("receive failed"); Out.Ln;
-  END;
+     dbg.prnBool("received", b);
   RETURN b
 END Receive;
 
@@ -184,13 +182,10 @@ PROCEDURE Send*(VAR inst: instance; str: ARRAY OF CHAR): BOOLEAN;
 VAR
   b : BOOLEAN;
 BEGIN
+    dbg.enter("Send");
   b := Internet.Write(inst.connection, str);
-  IF b THEN
-    Out.String("sent:"); Out.Ln;
-    Out.String(str); Out.Ln;
-  ELSE
-    Out.String("sending failed"); Out.Ln;
-  END;
+       dbg.prnBool("wrote successfully", b);
+       dbg.prnStr("whatever had to be sent", str);
   RETURN b
 END Send;
 
@@ -211,23 +206,25 @@ VAR
   b: BOOLEAN;
   msg: ARRAY 23 OF CHAR;
 BEGIN
+  dbg.enter("finalize");
   IF inst.doLog THEN
-  i := 0;
-  REPEAT
-    Out.String("flushing "); Out.String(inst.channelList^[i].channel); Out.String(" file."); Out.Ln;
-    Files.Register(inst.channelList^[i].logfile);
-    Files.Close(inst.channelList^[i].logfile);
-    INC(i)
-  UNTIL i = LEN(inst.channelList^);
+    i := 0;
+    REPEAT
+           dbg.msg("flushing");
+           dbg.prnStr("room", inst.channelList^[i].channel);
+      Files.Register(inst.channelList^[i].logfile);
+      Files.Close(inst.channelList^[i].logfile);
+      INC(i)
+    UNTIL i = LEN(inst.channelList^);
   END;
-    Out.String("quitting."); Out.Ln;
   msg := "QUIT :interrupt";
   l := Strings.Length(msg);
   msg[l] := LF;
   msg[l+1] := CR;
   msg[l+2] := 0X;
-  Out.String("closing connection."); Out.Ln;
+    dbg.msg("closing connection.");
     b := Send(inst, msg);
+    dbg.prnBool("b", b);
   Disconnect(inst);
   Out.String("exiting."); Out.Ln;
 END finalize;
@@ -236,6 +233,7 @@ PROCEDURE Create*(owner, user, nick, host, port, pass: chn; auth: BOOLEAN; callB
 VAR
   inst: instance;
 BEGIN
+    dbg.enter("Create");
   NEW(inst);
   inst.owner := owner;
   inst.user := user;
@@ -259,6 +257,7 @@ PROCEDURE formUserNickLine(VAR user, owner, nick, res: ARRAY OF CHAR);
 VAR
   l : INTEGER;
 BEGIN
+  dbg.enter("formUserNickLine");
   COPY(cmdUser, res);
   Strings.Append(" ", res);
   Strings.Append(user, res);
@@ -280,15 +279,22 @@ END formUserNickLine;
 
 PROCEDURE formModeLine(VAR str, nick: ARRAY OF CHAR);
 BEGIN
+               dbg.enter("formModeLine");
+               dbg.prnStr("str", str);
+               dbg.prnStr("nick", nick);
+
         COPY (cmdMode, str);
         Strings.Append(" ", str);
         Strings.Append(nick, str);
         Strings.Append(" +C", str);
         Strings.Append(eol, str);
+               dbg.prnStr("str", str);
+               dbg.prnStr("nick", nick);
 END formModeLine;
 
 PROCEDURE formJoinLine(VAR ln, chan: ARRAY OF CHAR);
 BEGIN
+        dbg.enter("formJoinLine");
         COPY(cmdJoin, ln);
         Strings.Append(" ", ln);
         Strings.Append(chan, ln);
@@ -299,6 +305,7 @@ PROCEDURE formModeJoinLine(VAR str, nick: ARRAY OF CHAR; channels: Channels);
 VAR
   i: LONGINT;
 BEGIN
+        dbg.enter("formModeJoinLine");
         COPY (cmdMode, str);
         Strings.Append(" ", str);
         Strings.Append(nick, str);
@@ -323,23 +330,26 @@ END formModeJoinLine;
 PROCEDURE isPing(VAR line: ARRAY OF CHAR): BOOLEAN;
 VAR
  tmp: ARRAY 5 OF CHAR;
+ b: BOOLEAN;
 BEGIN
+    dbg.enter("isPing");
     Strings.Extract(line, 0, 4, tmp);
-    IF Strings.Equal(tmp, cmdPing) THEN
-      RETURN TRUE
-    ELSE
-      RETURN FALSE
-    END
+    dbg.compStrs(tmp, cmdPing);
+    b := Strings.Equal(tmp, cmdPing);
+    dbg.prnBool("b", b);
+    RETURN b;
 END isPing;
 
 PROCEDURE isServerMsg(VAR line: ARRAY OF CHAR): BOOLEAN;
 VAR
   b: BOOLEAN;
 BEGIN
+  dbg.enter("isServerMsg");
   b:= FALSE;
   IF LEN(line) >=1 THEN
     IF line[0] = ':' THEN b := TRUE END
   END;
+  dbg.prnBool("is server msg", b);
   RETURN b;
 END isServerMsg;
 
@@ -348,7 +358,9 @@ VAR
   b : BOOLEAN;
   pos: INTEGER;
 BEGIN
+  dbg.enter("error");
   Strings.FindNext(errClosingLink, line, 0, b, pos);
+  dbg.prnBool("found next errClosingLink", b);
   RETURN b
 END error;
 
@@ -378,6 +390,7 @@ VAR
   pass: ARRAY 16 OF CHAR;
   b : BOOLEAN;
 BEGIN
+  dbg.enter("Auth");
   IF inst.authenticate THEN
      IF inst.doLog THEN Out.String("Authenticating!"); Out.Ln END;
      COPY ("PASS ", pass);
@@ -398,6 +411,7 @@ VAR
   str : ARRAY msgLen OF CHAR;
   b : BOOLEAN;
 BEGIN
+        dbg.enter("Mode");
         strUtils.zeroStr(str);
         formModeLine(str, inst.nick);
         b := Send(inst, str);
@@ -407,6 +421,7 @@ PROCEDURE ModeAndJoin*(VAR inst : instance);
 VAR str: ARRAY msgLen OF CHAR;
     b: BOOLEAN;
 BEGIN
+         dbg.enter("ModeAndJoin");
          strUtils.zeroStr(str);
          formModeJoinLine(str, inst.nick, inst.channelList);
          b := Send(inst, str);
@@ -417,6 +432,7 @@ VAR
   str: ARRAY msgLen OF CHAR;
   b: BOOLEAN;
 BEGIN
+  dbg.enter("Join");
   strUtils.zeroStr(str);
   formJoinLine(str, inst.channelList^[0].channel);
   Out.String("SENDING JOIN LINE"); Out.Ln;
@@ -428,11 +444,14 @@ VAR
   pos: INTEGER;
   found: BOOLEAN;
 BEGIN
+  dbg.enter("getUser");
+  dbg.prnStr("line", line); dbg.prnStr("user", user);
   strUtils.zeroStr(user);
   Strings.FindNext(" ", line, 1, found, pos);
   IF found THEN
     Strings.Extract(line, 1, pos - 1, user);
   END;
+  dbg.prnStr("line", line); dbg.prnStr("user", user);
   RETURN found
 END getUser;
 
@@ -441,6 +460,8 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
+  dbg.enter("getMsgType");
+  dbg.prnStr("line", line); dbg.prnStr("mtype", mtype);
   strUtils.zeroStr(mtype);
   Strings.FindNext(" ", line, 0, found, pos0);
   IF found THEN
@@ -449,6 +470,8 @@ BEGIN
        Strings.Extract(line, pos0 + 1, pos1 - pos0 - 1, mtype);
      END;
   END;
+  dbg.prnStr("line", line); dbg.prnStr("mtype", mtype);
+  dbg.prnBool("found", found);
   RETURN found
 END getMsgType;
 
@@ -457,6 +480,8 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
+  dbg.enter("getRecipient");
+  dbg.prnStr("line", line); dbg.prnStr("room", room);
   strUtils.zeroStr(room);
   Strings.FindNext(" ", line, 0, found, pos1);
   IF found THEN
@@ -465,6 +490,8 @@ BEGIN
        strUtils.getNextWord(line, pos0+1, room);
      END;
   END;
+  dbg.prnStr("line", line); dbg.prnStr("room", room);
+  dbg.prnBool("found", found);
   RETURN found
 END getRecipient;
 
@@ -473,6 +500,8 @@ VAR
   pos0, pos1: INTEGER;
   found: BOOLEAN;
 BEGIN
+  dbg.enter("getMsg");
+  dbg.prnStr("line", line); dbg.prnStr("msg", msg);
   strUtils.zeroStr(msg);
   Strings.FindNext(" ", line, 0, found, pos0);
   IF found THEN
@@ -482,6 +511,8 @@ BEGIN
         strUtils.getTillEOL(line, pos0+1, msg);
      END;
   END;
+  dbg.prnStr("line", line); dbg.prnStr("msg", msg);
+  dbg.prnBool("found", found);
   RETURN found
 END getMsg;
 
@@ -490,11 +521,15 @@ VAR
   i: INTEGER;
   b: BOOLEAN;
 BEGIN
+  dbg.enter("getUserName");
+  dbg.prnStr("user", user); dbg.prnStr("username", username);
   strUtils.zeroStr(username);
   Strings.FindNext("!", user, 0, b, i);
   IF b THEN
     Strings.Extract(user, 0, i, username);
   END;
+  dbg.prnStr("user", user); dbg.prnStr("username", username);
+  dbg.prnBool("b", b);
   RETURN b
 END getUserName;
 
@@ -503,7 +538,11 @@ VAR
   i, j: INTEGER;
   b: BOOLEAN;
 BEGIN
+  dbg.enter("getIdentName");
+  dbg.prnStr("user", user); dbg.prnStr("ident", ident);
+  dbg.msg("clearing ident");
   strUtils.zeroStr(ident);
+  dbg.prnStr("user", user); dbg.prnStr("ident", ident);
   Strings.FindNext("~", user, 0, b, i);
   IF b THEN
     Strings.FindNext("@", user, i, b, j);
@@ -511,6 +550,8 @@ BEGIN
       Strings.Extract(user, i+1, j-i-1, ident);
     END;
   END;
+  dbg.prnStr("user", user); dbg.prnStr("ident", ident);
+  dbg.prnBool("b", b);
   RETURN b;
 END getIdentName;
 
@@ -519,11 +560,16 @@ VAR
   i: INTEGER;
   b: BOOLEAN;
 BEGIN
+  dbg.enter("getHost");
+  dbg.prnStr("user", user); dbg.prnStr("host", host);
+  dbg.msg("clearing host");
   strUtils.zeroStr(host);
   Strings.FindNext("@", user, 0, b, i);
   IF b THEN
     Strings.Extract(user, i+1, Strings.Length(user)-i-1, host);
   END;
+  dbg.prnStr("user", user); dbg.prnStr("host", host);
+  dbg.prnBool("b", b);
   RETURN b;
 END getHost;
 
@@ -531,18 +577,26 @@ PROCEDURE isMention(VAR nick, line: ARRAY OF CHAR): BOOLEAN;
 VAR
   i : INTEGER;
   str: ARRAY 32 OF CHAR;
+  b: BOOLEAN;
 BEGIN
+  dbg.enter("isMention");
+  dbg.prnStr("nick", nick); dbg.prnStr("line", line);
   Strings.Extract(line, 0, Strings.Length(nick), str);
-  IF str = nick THEN
-    RETURN TRUE
-  ELSE
-    RETURN FALSE
-  END;
+  dbg.compStrs(str, nick);
+  b := str = nick;
+  dbg.prnBool("compared, ", b);
+  dbg.prnStr("nick", nick); dbg.prnStr("line", line);
+  RETURN b;
 END isMention;
 
 PROCEDURE cutMentionFromMessage(VAR nick, msg: ARRAY OF CHAR);
 BEGIN
- Strings.Delete(msg, 0, Strings.Length(nick) + 2);
+  dbg.enter("cutMentionFromMessage");
+  dbg.prnStr("nick", nick);
+  dbg.prnStr("msg", msg);
+  Strings.Delete(msg, 0, Strings.Length(nick) + 2);
+  dbg.prnStr("nick", nick);
+  dbg.prnStr("msg", msg);
 END cutMentionFromMessage;
 
 PROCEDURE sendMsgToDst*(VAR inst: instance; VAR dst: ARRAY OF CHAR; msg: ARRAY OF CHAR);
@@ -551,6 +605,7 @@ VAR
   i, j: LONGINT;
   b: BOOLEAN;
 BEGIN
+  dbg.enter("cutMentionFromMessage");
   i := Strings.Length(msg);
   j := Strings.Length(dst);
   NEW(s, i + j + Strings.Length(msgPRIVMSG) + 6(* to fit a colon and two spaces  and eol *));
@@ -575,6 +630,8 @@ VAR
   mn: BOOLEAN;
   i: INTEGER;
 BEGIN
+  dbg.enter("processFurther");
+  dbg.prnStr("line", line);
   i := 0; mn := FALSE; b := FALSE;
   b := getUser(line, userpart);
   b := getMsgType(line, messagetype);
@@ -649,50 +706,57 @@ VAR
   i : INTEGER;
   pstrs: strUtils.pstrings;
 BEGIN
+  dbg.enter("processLineByLine");
   pstrs := strUtils.string2pstrings(text);
+  dbg.prnPstrings("pstrs", pstrs);
   i := 0;
   REPEAT
-     Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
      processFurther(inst, pstrs^[i]^);
      INC(i)
   UNTIL i = LEN(pstrs^);
 END processLineByLine;
 
-PROCEDURE isWelcomeMessage1(text: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE doesLineContainPattern(VAR text: ARRAY OF CHAR; pattern: ARRAY OF CHAR; column: INTEGER): BOOLEAN;
 VAR
   parts: strUtils.pstrings;
   code: strUtils.pstring;
+  b: BOOLEAN;
 BEGIN
+  dbg.enter("doesLineContainPattern");
+  b := FALSE;
   (* Split 'text' into parts based on spaces *)
   parts := strUtils.tokenize(text, ' ');
-
+  dbg.prnPstrings("parts", parts);
   (* Check if the message has enough parts to be a valid IRC message *)
   IF parts # NIL THEN
-      Out.String("length of parts array is "); Out.Int(LEN(parts^), 0); Out.Ln;
-    IF LEN(parts^) >= 2 THEN
-      code := parts^[1];
-         Out.String("comparing "); Out.String(code^); Out.String(" to 001"); Out.Ln;
-      RETURN Strings.Compare(code^, rplWelcome) = 0;
+    IF LEN(parts^) >= column THEN
+      code := parts^[column-1];
+      dbg.compStrs(code^, pattern);
+      b :=Strings.Compare(code^, pattern) = 0;
+      dbg.prnBool("same", b);
     END;
   END;
-  RETURN FALSE;
-END isWelcomeMessage1;
+  RETURN b;
+END doesLineContainPattern;
 
-PROCEDURE isWelcomeMessage(text: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE isWelcomeMessage(VAR text: ARRAY OF CHAR): BOOLEAN;
 VAR
   i : INTEGER;
   pstrs: strUtils.pstrings;
   r: BOOLEAN;
 BEGIN
+  dbg.enter("isWelcomeMessage");
   r := FALSE;
   pstrs := strUtils.string2pstrings(text);
+  dbg.prnPstrings("pstrs", pstrs);
   i := 0;
   IF pstrs # NIL THEN
     REPEAT
-       Out.Int(i, 0); Out.String(": '"); Out.String(pstrs^[i]^); Out.String("'"); Out.Ln;
-       r := isWelcomeMessage1(pstrs^[i]^);
+       dbg.enterLoop("will check if welcome message every line");
+       r := doesLineContainPattern(pstrs^[i]^, rplWelcome, 2);
        INC(i)
     UNTIL r OR (i = LEN(pstrs^));
+    dbg.exitLoop("exited the loop");
   END;
     RETURN r
 END isWelcomeMessage;
@@ -701,11 +765,13 @@ PROCEDURE processResponse(VAR inst: instance; VAR text: ARRAY OF CHAR): BOOLEAN;
 VAR
   b : BOOLEAN;
 BEGIN
+  dbg.enter("processResponse");
   b := TRUE;
   IF isPing(text) THEN
     Pong(inst, text);
   END;
   IF error(text) THEN
+    (* TODO reconnect here instad of closing *)
     finalize(inst);
     b := FALSE;
   ELSE
@@ -727,19 +793,22 @@ VAR
   txt : ARRAY msgLen OF CHAR;
   i: INTEGER; connectionOK: BOOLEAN;
 BEGIN
+  dbg.enter("Loop");
   i := 0; connectionOK := TRUE;
   REPEAT
+       dbg.msg("starting receive");
     b := Receive(inst, txt);
-      (* hopefully disconnects will be handled like this
-         i have noticed that during some disconnects
-         bot receives many empty strings one after the other *)
+        dbg.prnBool("received", b);
       IF ~b THEN
         i := 0; connectionOK := FALSE;
         REPEAT
+            dbg.msg("trying to receive again");
           b := Receive(inst, txt);
+            dbg.prnBool("received", b);
           IF ~b THEN
             INC(i)
           ELSE
+                dbg.yaymsg("received!");
             connectionOK := TRUE;
             i := 0;
           END;
@@ -760,12 +829,7 @@ BEGIN
   UNTIL ~b OR ~b2 OR (i = numOfFailed);
 END Loop;
 
-PROCEDURE setDebug*(state: BOOLEAN);
-BEGIN
-  debug := state
-END setDebug;
-
 BEGIN
   eol[0] := LF; eol[1] := CR;
-  debug := FALSE;
+  dbg.setDebug(TRUE);
 END IRC.
