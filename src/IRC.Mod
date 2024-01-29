@@ -2,7 +2,7 @@ MODULE IRC; (*noch 23.2.2017 / 19.5.2017*)
 IMPORT Out, Files, Strings := ooc2Strings, strUtils, netTypes, Internet, time, Platform;
 
 CONST
-  msgLen* = 513; (* well irc msg len is 512 *)
+  msgLen* = 11711; (* well irc msg len is 512, but we get in the buffer several messages. 11711 should be enough for 23 full lines *)
   waitTime = 23000; (* wait 23 seconds before reconnect *)
   (* irc commands *)
   cmdPing*      = "PING";
