@@ -339,7 +339,7 @@ BEGIN
   b:= FALSE;
   IF LEN(line) >=1 THEN
     IF line[0] = ':' THEN b := TRUE END
-  END
+  END;
   RETURN b;
 END isServerMsg;
 
