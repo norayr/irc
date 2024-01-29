@@ -333,8 +333,14 @@ BEGIN
 END isPing;
 
 PROCEDURE isServerMsg(VAR line: ARRAY OF CHAR): BOOLEAN;
+VAR
+  b: BOOLEAN;
 BEGIN
-  IF line[0] = ':' THEN RETURN TRUE ELSE RETURN FALSE END
+  b:= FALSE;
+  IF LEN(line) >=1 THEN
+    IF line[0] = ':' THEN b := TRUE END
+  END
+  RETURN b;
 END isServerMsg;
 
 PROCEDURE error(VAR line: ARRAY OF CHAR): BOOLEAN;
@@ -456,7 +462,7 @@ BEGIN
   IF found THEN
      Strings.FindNext(" ", line, pos1+1, found, pos0);
      IF found THEN
-       strUtils.getNextWord(line, pos0, room);
+       strUtils.getNextWord(line, pos0+1, room);
      END;
   END;
   RETURN found
