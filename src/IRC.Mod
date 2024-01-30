@@ -576,22 +576,13 @@ END getHost;
 PROCEDURE isMention(VAR nick, line: ARRAY OF CHAR): BOOLEAN;
 VAR
   i : INTEGER;
-  str: ARRAY 32 OF CHAR;
   b: BOOLEAN;
-  pstrs: strUtils.pstrings;
 BEGIN
+  b := FALSE;
   dbg.enter("isMention");
   dbg.prnStr("nick", nick); dbg.prnStr("line", line);
-  pstrs := strUtils.string2pstrings(line);
-  dbg.prnPstrings("created pstrs to find mention", pstrs);
-  i := 0; b := FALSE;
-  REPEAT
-    dbg.compStrs(pstrs^[i]^, nick);
-    b := pstrs^[i]^ = nick;
-    dbg.prnBool("compared, ", b);
-    INC(i)
-  UNTIL b OR (i = LEN(pstrs^));
-  dbg.prnStr("nick", nick); dbg.prnStr("line", line);
+  Strings.FindNext(nick, line, 0, b, i);
+  dbg.prnBool("mentioned", b);
   RETURN b;
 END isMention;
 
