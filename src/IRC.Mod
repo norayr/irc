@@ -768,8 +768,8 @@ BEGIN
     Pong(inst, text);
   END;
   IF error(text) THEN
-    (* TODO reconnect here instad of closing *)
-    finalize(inst);
+    (* Disconnect on error to allow reconnection *)
+    Disconnect(inst);
     b := FALSE;
   ELSE
     IF isServerMsg(text) THEN (* string starts with ':' *)
@@ -788,42 +788,52 @@ CONST numOfFailed = 1024;
 VAR
   b, b2 : BOOLEAN;
   txt : ARRAY msgLen OF CHAR;
-  i: INTEGER; connectionOK: BOOLEAN;
+  i: INTEGER;
+  connected: BOOLEAN;
 BEGIN
   dbg.enter("Loop");
-  i := 0; connectionOK := TRUE;
-  REPEAT
-       dbg.msg("starting receive");
-    b := Receive(inst, txt);
-        dbg.prnBool("received", b);
-      IF ~b THEN
-        i := 0; connectionOK := FALSE;
-        REPEAT
-            dbg.msg("trying to receive again");
-          b := Receive(inst, txt);
-            dbg.prnBool("received", b);
-          IF ~b THEN
-            INC(i)
-          ELSE
-                dbg.yaymsg("received!");
-            connectionOK := TRUE;
-            i := 0;
-          END;
-          IF ~connectionOK THEN
-            Disconnect(inst);
-            Platform.Delay(waitTime);
-            REPEAT
-              b := Connect(inst);
-              IF ~b THEN INC(i); Platform.Delay(waitTime) END;
-            UNTIL b OR (i = numOfFailed);
-          END;
-        UNTIL connectionOK OR (i = numOfFailed);
-      END;
+  i := 0;
+  connected := FALSE;
 
-      IF connectionOK THEN
-        b2 := processResponse(inst, txt);
+  WHILE i < numOfFailed DO
+    IF ~connected THEN
+      (* Attempt to connect *)
+      Disconnect(inst); (* Ensure previous connection is closed *)
+      connected := Connect(inst);
+      IF connected THEN
+        (* Authenticate and reset failure counter *)
+        IF Auth(inst) THEN
+          i := 0; (* Reset failure counter on successful auth *)
+        ELSE
+          connected := FALSE; (* Auth failed *)
+        END;
       END;
-  UNTIL ~b OR ~b2 OR (i = numOfFailed);
+      IF ~connected THEN
+        Platform.Delay(waitTime);
+        INC(i);
+        CONTINUE;
+      END;
+    END;
+
+    (* Process messages while connected *)
+    b := Receive(inst, txt);
+    IF b THEN
+      b2 := processResponse(inst, txt);
+      IF ~b2 THEN
+        (* Error in processing, disconnect *)
+        Disconnect(inst);
+        connected := FALSE;
+        Platform.Delay(waitTime);
+        INC(i);
+      END;
+    ELSE
+      (* Receive failed, disconnect *)
+      Disconnect(inst);
+      connected := FALSE;
+      Platform.Delay(waitTime);
+      INC(i);
+    END;
+  END; (* WHILE *)
 END Loop;
 
 BEGIN
