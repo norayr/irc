@@ -789,51 +789,59 @@ VAR
   b, b2 : BOOLEAN;
   txt : ARRAY msgLen OF CHAR;
   i: INTEGER;
-  connected: BOOLEAN;
+  connected, exitLoop: BOOLEAN;
 BEGIN
   dbg.enter("Loop");
   i := 0;
   connected := FALSE;
+  exitLoop := FALSE;
 
-  WHILE i < numOfFailed DO
+  LOOP
+    (* Exit if too many failures *)
+    IF i >= numOfFailed THEN EXIT END;
+
+    (* Connection management *)
     IF ~connected THEN
-      (* Attempt to connect *)
-      Disconnect(inst); (* Ensure previous connection is closed *)
+      Disconnect(inst);
       connected := Connect(inst);
       IF connected THEN
-        (* Authenticate and reset failure counter *)
+        (* Authentication phase *)
         IF Auth(inst) THEN
-          i := 0; (* Reset failure counter on successful auth *)
+          i := 0;  (* Reset failure counter *)
+          connected := TRUE;
         ELSE
-          connected := FALSE; (* Auth failed *)
+          connected := FALSE;
+          INC(i);
         END;
+      ELSE
+        INC(i);
       END;
+      
+      (* Wait before retrying *)
       IF ~connected THEN
         Platform.Delay(waitTime);
-        INC(i);
-        CONTINUE;
+        EXIT  (* Use LOOP/EXIT structure for retry logic *)
       END;
     END;
 
-    (* Process messages while connected *)
-    b := Receive(inst, txt);
-    IF b THEN
-      b2 := processResponse(inst, txt);
-      IF ~b2 THEN
-        (* Error in processing, disconnect *)
-        Disconnect(inst);
+    (* Message processing *)
+    IF connected THEN
+      b := Receive(inst, txt);
+      IF b THEN
+        b2 := processResponse(inst, txt);
+        IF ~b2 THEN  (* Error in processing *)
+          connected := FALSE;
+          INC(i);
+        END;
+      ELSE  (* Receive failed *)
         connected := FALSE;
-        Platform.Delay(waitTime);
         INC(i);
       END;
-    ELSE
-      (* Receive failed, disconnect *)
-      Disconnect(inst);
-      connected := FALSE;
-      Platform.Delay(waitTime);
-      INC(i);
     END;
-  END; (* WHILE *)
+
+    (* Short delay to prevent busy-wait *)
+    Platform.Delay(100);  (* 0.1 second *)
+  END;
 END Loop;
 
 BEGIN
