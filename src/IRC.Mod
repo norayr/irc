@@ -816,11 +816,10 @@ BEGIN
       ELSE
         INC(i);
       END;
-      
+
       (* Wait before retrying *)
       IF ~connected THEN
         Platform.Delay(waitTime);
-        EXIT  (* Use LOOP/EXIT structure for retry logic *)
       END;
     END;
 
