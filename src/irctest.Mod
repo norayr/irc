@@ -1,12 +1,11 @@
 MODULE irctest; (* noch 13.4.2017 / 18.5.2017*)
 
-IMPORT IRC, Out, Strings := ooc2Strings, Platform;
+IMPORT IRC, Out, Platform;
 
 (* i am moving these to global section to make possible for interrupt handler to access instance *)
 VAR
   inst: IRC.instance;
   channels : IRC.Channels;
-  b: BOOLEAN;
 
 
 (*
@@ -87,10 +86,6 @@ BEGIN
 
   Platform.SetInterruptHandler(interrupt);
 
-  IF IRC.Connect(inst) # FALSE THEN
-    b := IRC.Auth(inst);
-    IRC.Loop(inst);
-  END;
+  IRC.Loop(inst);
 
 END irctest.
-
