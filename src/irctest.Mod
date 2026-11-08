@@ -1,91 +1,30 @@
-MODULE irctest; (* noch 13.4.2017 / 18.5.2017*)
+MODULE irctest;
+(* SPDX-License-Identifier: LGPL-3.0-only *)
+IMPORT IRC, IRCTLS, Args, Out, IntStr, Strings := oocStrings, Platform;
+VAR client: IRC.Client; config: IRC.Config; port: ARRAY 16 OF CHAR;
+  room: ARRAY 128 OF CHAR; result: SHORTINT; ok: BOOLEAN;
 
-IMPORT IRC, Out, Platform;
-
-(* i am moving these to global section to make possible for interrupt handler to access instance *)
-VAR
-  inst: IRC.instance;
-  channels : IRC.Channels;
-
-
-(*
-PROCEDURE onMessage(VAR msg : ARRAY OF CHAR);
+PROCEDURE State(client: IRC.Client; state, error: INTEGER; detail: ARRAY OF CHAR);
+VAR line: ARRAY 256 OF CHAR; accepted: BOOLEAN;
 BEGIN
-   Out.String("callback procedure is running, youhoo!"); Out.Ln;
-   Out.String("input:"); Out.Ln;
-   Out.String(msg); Out.String("|"); Out.Ln;
-   Out.Ln;
-END onMessage;
-*)
-PROCEDURE onPrivateMessage(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, host: ARRAY OF CHAR);
-BEGIN
-  Out.String("*** private message ***"); Out.Ln;
-  Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
-  Out.String("message type: '"); Out.String(msgtype); Out.Char("'"); Out.Ln;
-  Out.String("user: '"); Out.String(user); Out.Char("'"); Out.Ln;
-  Out.String("ident: '"); Out.String(ident); Out.Char("'"); Out.Ln;
-  Out.String("host: '"); Out.String(host); Out.Char("'"); Out.Ln;
-  Out.String("*** that's it ***"); Out.Ln;
-  IRC.sendMsgToDst(inst, user, "hello, nice to meet you");
-END onPrivateMessage;
+  Out.String(detail); Out.Ln;
+  IF (state = IRC.Ready) & (error = 0) THEN
+    COPY("JOIN ", line); Strings.Append(room, line); accepted := IRC.SendRaw(client, line)
+  END
+END State;
 
-PROCEDURE onPublicMessage(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
-BEGIN
-  Out.String("*** public message ***"); Out.Ln;
-  Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
-  Out.String("message type: '"); Out.String(msgtype); Out.Char("'"); Out.Ln;
-  Out.String("user: '"); Out.String(user); Out.Char("'"); Out.Ln;
-  Out.String("ident: '"); Out.String(ident); Out.Char("'"); Out.Ln;
-  Out.String("recipient: '"); Out.String(rcpt); Out.Char("'"); Out.Ln;
-  Out.String("host: '"); Out.String(host); Out.Char("'"); Out.Ln;
-  Out.String("*** that's it ***"); Out.Ln;
-  IF msgtype # IRC.msgJOIN THEN IRC.sendMsgToDst(inst, rcpt, "test back") END;
-END onPublicMessage;
+PROCEDURE Message(client: IRC.Client; VAR message: IRC.Message);
+BEGIN Out.String(message.raw^); Out.Ln END Message;
 
-PROCEDURE onPublicMessageWithMention(VAR inst: IRC.instance; VAR msg, msgtype, user, ident, rcpt, host: ARRAY OF CHAR);
-BEGIN
-  Out.String("*** public message, bot name mentioned ***"); Out.Ln;
-  Out.String("message: '"); Out.String(msg); Out.Char("'"); Out.Ln;
-  Out.String("message type: '"); Out.String(msgtype); Out.Char("'"); Out.Ln;
-  Out.String("user: '"); Out.String(user); Out.Char("'"); Out.Ln;
-  Out.String("ident: '"); Out.String(ident); Out.Char("'"); Out.Ln;
-  Out.String("recipient: '"); Out.String(rcpt); Out.Char("'"); Out.Ln;
-  Out.String("host: '"); Out.String(host); Out.Char("'"); Out.Ln;
-  Out.String("*** that's it ***"); Out.Ln;
-END onPublicMessageWithMention;
-
-PROCEDURE interrupt(i: LONGINT);
-BEGIN
-(* here we need to flush files to disk before exiting. and probably close the irc connection *)
-   Out.String("interrupt caught."); Out.Ln;
-   IRC.finalize(inst);
-   HALT(0);
-END interrupt;
+PROCEDURE Interrupt(code: LONGINT);
+BEGIN IF client # NIL THEN IRC.Stop(client) END; HALT(0) END Interrupt;
 
 BEGIN
-  (* should call
-  Create(owner: chn; user: chn; nick: chn; host: chn; port: chn; pass: chn; auth: BOOLEAN; callBackPrv: cbPrivateMessage; callBackPbl: cbPublicMessage; callBackPblMn: cbPublicMessageWithMention): instance;
-  *)
-  inst := IRC.Create("norayr_tanakian", "norayr_tanakian", "oberonbot", "irc.libera.chat", "6667", "aaa", FALSE, onPrivateMessage, onPublicMessage, onPublicMessageWithMention);
-  (* old usage
-  inst.owner := "norayr_tanakian";
-  inst.user := "norayr_tanakian";
-  inst.nick := "vocbot";
-  inst.host := "irc.freenode.net";
-  inst.port := "6667";
-  inst.callbackPrivate := onPrivateMessage;
-  inst.callbackPublic := onPublicMessage;
-  inst.callbackPublicMention := onPublicMessageWithMention;
-  *)
-
-
-  NEW(channels, 1);
-  channels[0].channel := "#oberon-test";
-  IRC.setLogging(inst, TRUE);
-  IRC.initChannelList(inst, channels);
-
-  Platform.SetInterruptHandler(interrupt);
-
-  IRC.Loop(inst);
-
+  IF Args.argc # 5 THEN Out.String("usage: irctest host port nick channel"); Out.Ln; HALT(3) END;
+  IRC.DefaultConfig(config); Args.Get(1, config.host); Args.Get(2, port);
+  Args.Get(3, config.nick); Args.Get(4, room); IntStr.StrToInt(port, config.port, result);
+  IF result # 0 THEN HALT(3) END;
+  config.user := config.nick; config.realName := "Oberon IRC example";
+  client := IRC.New(config, IRCTLS.New(), Message, State);
+  Platform.SetInterruptHandler(Interrupt); ok := IRC.Start(client); IRC.Loop(client)
 END irctest.
